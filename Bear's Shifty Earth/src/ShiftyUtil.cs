@@ -35,7 +35,7 @@ namespace BearsShiftyEarth
 
             int effectiveSupport = 0;
 
-            IBlockAccessor blockAccessor = world.GetLockFreeBlockAccessor();
+            IBlockAccessor blockAccessor = world.GetBlockAccessor(false, false, true);
             Block scannedBlock;
 
             // if we are exposed to the sky, penalize support based on the amount of rainfall. Light drizzle isn't enough to

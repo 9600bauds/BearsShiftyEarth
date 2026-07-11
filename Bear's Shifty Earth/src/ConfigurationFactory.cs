@@ -13,6 +13,7 @@ namespace BearsShiftyEarth
         #region Fields
 
         private ShiftySettings config;
+        private AssetLocation rockslideSound = new("game:sounds/effect/rockslide");
 
         #endregion Fields
 
@@ -75,6 +76,14 @@ namespace BearsShiftyEarth
         #region Helper Functions
 
         /// <summary>
+        /// Disables falling on the provided properties. Edits the actual property object, not a copy.
+        /// </summary>
+        public static void DisableFalling(ref ShiftyProps shiftyProps)
+        {
+            shiftyProps.permStable = true;
+        }
+
+        /// <summary>
         /// Checks to see if the block is configured to be a shifty block and should have our custom logic applied. Returns true if it should be targeted by custom logic, false if it behaves as vanilla.
         /// </summary>
         public static (bool, EarthType) IsWhatShiftyBlock(Block block)
@@ -87,6 +96,22 @@ namespace BearsShiftyEarth
                 BlockCodes.FORESTFLOOR_CODE => (true, EarthType.Soil),
                 _ => (false, EarthType.NONE),
             };
+        }
+
+        /// <summary>
+        /// Sets the dustIntensity value on the provided Block Behavior. The behavior must be or inherit from BlockBehaviorUnstableFalling.
+        /// </summary>
+        public static bool SetDustIntensity(BlockBehaviorUnstableFalling behaveObj, float dusty)
+        {
+            FieldInfo? chanceField = typeof(BlockBehaviorUnstableFalling).GetField("dustIntensity", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            if (chanceField == null) {
+                return false;
+            }
+
+            chanceField.SetValue(behaveObj, dusty);
+
+            return true;
         }
 
         /// <summary>
@@ -106,43 +131,42 @@ namespace BearsShiftyEarth
         }
 
         /// <summary>
-        /// Disables falling on the provided properties. Edits the actual property object, not a copy.
+        /// Sets the falling sound. Does not verify asset's existence, do this before running this function.
         /// </summary>
-        public static void DisableFalling(ref ShiftyProps shiftyProps)
+        public static bool SetFallSound(BlockBehaviorUnstableFalling behaveObj, AssetLocation sound)
         {
-            shiftyProps.permStable = true;
+            FieldInfo? chanceField = typeof(BlockBehaviorUnstableFalling).GetField("fallSound", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            if (chanceField == null) {
+                return false;
+            }
+
+            chanceField.SetValue(behaveObj, sound);
+
+            return true;
         }
 
         /// <summary>
-        /// Configures the shifty block using soil-based settings.
+        /// Bakes the grass coverage bonus into the block's behavior as a reduction to the required support.
         /// </summary>
-        public void ConfigureAsSoil(BlockBehaviorShiftyFalling behavior)
+        public void AddGrassCoverageSupport(BlockBehaviorShiftyFalling behavior)
         {
-            if (config.SoilBehavior is FallFlag.Vanilla) {
-                behavior.IsShifty = false;
-            }
-            else if (config.SoilBehavior is FallFlag.Disabled) {
-                DisableFalling(ref behavior.Props); // setting support to an absurdly low number prevents the vanilla logic from ever triggering
-            }
-            else {
-                behavior.RequiredSupport = config.SoilSupportRequired;
-                behavior.AdjacentSupport = config.SoilAdjacentSupport;
-                behavior.BelowSupport = config.SoilBelowSupport;
-                behavior.AboveSupport = config.SoilAboveSupport;
-                behavior.RainPenalty = config.MaximumSoilStormPenalty;
-                behavior.PlantBonus = config.PlantHostBonus;
-                behavior.fallSideways = true;
+            // check for grass coverage
+            switch (behavior.block.LastCodePart()) {
+                case BlockCodes.SPARSE_GRASS_CODE:
+                    behavior.RequiredSupport -= (int)(config.GrassCoverBonus * 0.33f);
+                    break;
 
-                // special code handling for forest floors, which otherwise count as soil
-                if (behavior.block.FirstCodePart() == BlockCodes.FORESTFLOOR_CODE) {
-                    if (config.ForestFloorIsStable) {
-                        DisableFalling(ref behavior.Props);
-                    }
-                    else {
-                        behavior.RequiredSupport -= config.ForestFloorBonus;
-                    }
-                }
-                _ = SetFallChance(behavior, config.SoilFallChance);
+                case BlockCodes.PATCHY_GRASS_CODE:
+                    behavior.RequiredSupport -= (int)(config.GrassCoverBonus * 0.66f);
+                    break;
+
+                case BlockCodes.GRASSY_GRASS_CODE:
+                    behavior.RequiredSupport -= config.GrassCoverBonus;
+                    break;
+
+                default:
+                    break;
             }
         }
 
@@ -166,6 +190,32 @@ namespace BearsShiftyEarth
                 behavior.fallSideways = true;
 
                 _ = SetFallChance(behavior, config.ClayFallChance);
+                _ = SetFallSound(behavior, rockslideSound);
+                _ = SetDustIntensity(behavior, 0.1f);
+            }
+        }
+
+        /// <summary>
+        /// Configures the shifty block using clay-based settings.
+        /// </summary>
+        public void ConfigureAsFarmland(BlockBehaviorShiftyFalling behavior)
+        {
+            if (config.FarmlandBehavior is FallFlag.Vanilla or FallFlag.Disabled) {
+                // farmland does not fall in vanilla
+                DisableFalling(ref behavior.Props);
+            }
+            else {
+                behavior.RequiredSupport = config.FarmSupportRequired;
+                behavior.AdjacentSupport = config.FarmAdjacentSupport;
+                behavior.BelowSupport = config.FarmBelowSupport;
+                behavior.AboveSupport = config.FarmAboveSupport;
+                behavior.RainPenalty = config.MaximumFarmStormPenalty;
+                behavior.PlantBonus = config.PlantHostBonus;
+                behavior.fallSideways = true;
+
+                _ = SetFallChance(behavior, config.FarmFallChance);
+                _ = SetFallSound(behavior, rockslideSound);
+                _ = SetDustIntensity(behavior, 0.3f);
             }
         }
 
@@ -191,52 +241,42 @@ namespace BearsShiftyEarth
                 behavior.fallSideways = true;
 
                 _ = SetFallChance(behavior, config.PeatFallChance);
+                _ = SetFallSound(behavior, rockslideSound);
+                _ = SetDustIntensity(behavior, 0.2f);
             }
         }
 
         /// <summary>
-        /// Configures the shifty block using clay-based settings.
+        /// Configures the shifty block using soil-based settings.
         /// </summary>
-        public void ConfigureAsFarmland(BlockBehaviorShiftyFalling behavior)
+        public void ConfigureAsSoil(BlockBehaviorShiftyFalling behavior)
         {
-            if (config.FarmlandBehavior is FallFlag.Vanilla or FallFlag.Disabled) {
-                // farmland does not fall in vanilla
-                DisableFalling(ref behavior.Props);
+            if (config.SoilBehavior is FallFlag.Vanilla) {
+                behavior.IsShifty = false;
+            }
+            else if (config.SoilBehavior is FallFlag.Disabled) {
+                DisableFalling(ref behavior.Props); // setting support to an absurdly low number prevents the vanilla logic from ever triggering
             }
             else {
-                behavior.RequiredSupport = config.FarmSupportRequired;
-                behavior.AdjacentSupport = config.FarmAdjacentSupport;
-                behavior.BelowSupport = config.FarmBelowSupport;
-                behavior.AboveSupport = config.FarmAboveSupport;
-                behavior.RainPenalty = config.MaximumFarmStormPenalty;
+                behavior.RequiredSupport = config.SoilSupportRequired;
+                behavior.AdjacentSupport = config.SoilAdjacentSupport;
+                behavior.BelowSupport = config.SoilBelowSupport;
+                behavior.AboveSupport = config.SoilAboveSupport;
+                behavior.RainPenalty = config.MaximumSoilStormPenalty;
                 behavior.PlantBonus = config.PlantHostBonus;
                 behavior.fallSideways = true;
+                _ = SetDustIntensity(behavior, 0.3f);
 
-                _ = SetFallChance(behavior, config.FarmFallChance);
-            }
-        }
-
-        /// <summary>
-        /// Bakes the grass coverage bonus into the block's behavior as a reduction to the required support.
-        /// </summary>
-        public void AddGrassCoverageSupport(BlockBehaviorShiftyFalling behavior)
-        {
-            // check for grass coverage
-            switch (behavior.block.LastCodePart()) {
-                case BlockCodes.SPARSE_GRASS_CODE:
-                    behavior.RequiredSupport -= (int)(config.GrassCoverBonus * 0.33f);
-                    break;
-
-                case BlockCodes.PATCHY_GRASS_CODE:
-                    behavior.RequiredSupport -= (int)(config.GrassCoverBonus * 0.66f);
-                    break;
-
-                case BlockCodes.GRASSY_GRASS_CODE:
-                    behavior.RequiredSupport -= config.GrassCoverBonus;
-                    break;
-
-                default:
-                    break;
+                // special code handling for forest floors, which otherwise count as soil
+                if (behavior.block.FirstCodePart() == BlockCodes.FORESTFLOOR_CODE) {
+                    if (config.ForestFloorIsStable) {
+                        DisableFalling(ref behavior.Props);
+                    }
+                    else {
+                        behavior.RequiredSupport -= config.ForestFloorBonus;
+                    }
+                }
+                _ = SetFallChance(behavior, config.SoilFallChance);
             }
         }
 

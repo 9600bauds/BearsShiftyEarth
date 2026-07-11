@@ -11,11 +11,8 @@ namespace BearsShiftyEarth.Compat
     {
         #region Properties
 
-        /// <summary>The support and falling properties of this block. Returns a reference to the object, not a copy.</summary>
-        public ref ShiftyProps Props { get => ref props; }
-
-        /// <summary>The amount of support required to be ineligible to fall.</summary>
-        public int RequiredSupport { get => props.requiredSupport; set => props.requiredSupport = value; }
+        /// <summary>The support bonus the block gets for having a solid block above it.</summary>
+        public int AboveSupport { get => props.aboveSupport; set => props.aboveSupport = value; }
 
         /// <summary>The support bonus the block gets per adjacent solid block.</summary>
         public int AdjacentSupport { get => props.adjacentSupport; set => props.adjacentSupport = value; }
@@ -23,17 +20,20 @@ namespace BearsShiftyEarth.Compat
         /// <summary>The support bonus the block gets for a solid block beneath it.</summary>
         public int BelowSupport { get => props.belowSupport; set => props.belowSupport = value; }
 
-        /// <summary>The support bonus the block gets for having a solid block above it.</summary>
-        public int AboveSupport { get => props.aboveSupport; set => props.aboveSupport = value; }
+        /// <summary>Whether or not this block should follow Shifty Earth support logic.</summary>
+        public bool IsShifty { get => isShifty; set => isShifty = value; }
 
         /// <summary>The support bonus the block gets for having a plant or crop block above it.</summary>
         public int PlantBonus { get => props.plantBonus; set => props.plantBonus = value; }
 
+        /// <summary>The support and falling properties of this block. Returns a reference to the object, not a copy.</summary>
+        public ref ShiftyProps Props { get => ref props; }
+
         /// <summary>The maxmimum penalty the block gets when exposed to heavy rainfall.</summary>
         public int RainPenalty { get => props.rainPenalty; set => props.rainPenalty = value; }
 
-        /// <summary>Whether or not this block should follow Shifty Earth support logic.</summary>
-        public bool IsShifty { get => isShifty; set => isShifty = value; }
+        /// <summary>The amount of support required to be ineligible to fall.</summary>
+        public int RequiredSupport { get => props.requiredSupport; set => props.requiredSupport = value; }
 
         #endregion Properties
 
@@ -60,9 +60,6 @@ namespace BearsShiftyEarth.Compat
         /// </summary>
         public override void OnBlockPlaced(IWorldAccessor world, BlockPos blockPos, ref EnumHandling handling)
         {
-#if DEBUG
-            world.Api.Logger.Warning("Successfully hijacked terrain slabs logic!");
-#endif
             if (world.Side == EnumAppSide.Client) {
                 return;
             }
